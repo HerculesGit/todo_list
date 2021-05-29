@@ -25,12 +25,10 @@ module.exports = {
         allowNull: true,
         type: DataTypes.DATE,
       },
-      deteledAt: {
-        allowNull: true,
-        type: DataTypes.DATE,
+      deletedAt: {
+        type: DataTypes.DATE
       },
     });
-
   },
 
   down: async (queryInterface, Sequelize) => {

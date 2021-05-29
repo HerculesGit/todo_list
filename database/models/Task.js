@@ -2,9 +2,9 @@
 const Sequelize = require('sequelize');
 const connection = require('../database');
 
-const Todo = connection.define(
+const Task = connection.define(
   // table name
-  'todo',
+  'tasks',
   // fields 
   {
     // field
@@ -15,9 +15,14 @@ const Todo = connection.define(
     isDone: {
       type: Sequelize.BOOLEAN,
       allowNull: false
-    }
+    },
+  },
+  {
+    // createdAt, updatedAt, createdAt, 
+    paranoid: true,
   }
+
 );
 
-Todo.sync({ force: false }).then(() => { })
-module.exports = Todo;
+Task.sync({ force: false }).then(() => { })
+module.exports = Task;
