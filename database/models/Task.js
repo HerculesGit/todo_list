@@ -1,28 +1,18 @@
+module.exports = (sequelize, DataTypes) => {
+  const Task = sequelize.define('task', {
+    name: DataTypes.STRING,
+    isDone: DataTypes.BOOLEAN,
+    userId: DataTypes.UUID,
+  }, {
 
-const Sequelize = require('sequelize');
-const connection = require('../database');
+    tableName: "task",
+    modelName: "task"
+  });
 
-const Task = connection.define(
-  // table name
-  'tasks',
-  // fields 
-  {
-    // field
-    name: {
-      type: Sequelize.STRING,
-      allowNull: false
-    },
-    isDone: {
-      type: Sequelize.BOOLEAN,
-      allowNull: false
-    },
-  },
-  {
-    // createdAt, updatedAt, createdAt, 
-    paranoid: true,
-  }
+  Task.associate = (models) => {
+    Task.belongsTo(models.user);
+  };
 
-);
-
-Task.sync({ force: false }).then(() => { })
-module.exports = Task;
+  Task.beforeCreate(task => task.id = uuid())
+  return Task;
+};
