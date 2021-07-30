@@ -10,20 +10,27 @@ app.use(bodyParser.urlencoded({ extended: false }));
 // express with json
 app.use(bodyParser.json());
 
-
-// const Task = require('./database/models/task');
-// const User = require('./database/models/user');
-// const { Author, Book } = require('./database/models/author-book');
-// cosnt TTTask = require('./database/models/author-book')
 const models = require('./database/models')
+const { Op, Sequelize } = require('sequelize');
 
 // list
+/**
+ * @deprecated
+ * 
+*/
 app.get('/tasks', async (request, response) => {
   response.statusCode = 200;
   try {
-    const tasks = await Task().findAll({ raw: true })
+    const tasks = await models.task.findAll({
+      where: {
+        deletedAt: {
+          [Op.ne]: null
+        }
+      }, raw: true
+    })
     response.send({ tasks });
   } catch (error) {
+    console.log('error', error)
     response.statusCode = 500;
     response.send({ error: error });
 
@@ -34,51 +41,28 @@ app.get('/tasks', async (request, response) => {
 app.post('/tasks', async (request, response) => {
   let { name, isDone, userId } = request.body;
 
-  if (userId == undefined || userId == null || userId == '') {
+  if (!validateId(userId)) {
+    response.statusCode = 404;
+    return sendInvalidIdMessage('The userId not informed');
+  }
+  if (!isNotNull(name) || name === '') {
     response.statusCode = 400;
-    response.send({ title: 'User cannot be null', cause: 'The userId not informed' });
+    return response.send({ title: 'Name is null', cause: 'Name cannot be null' });
   }
 
-  if (name == undefined || name == null || name == '') {
-    response.statusCode = 400;
-    response.send({ title: 'Name is null', cause: 'Name cannot be null' });
-  } else {
-    const taskToCreate = {
-      name,
-      isDone,
-      userId
-    }
-    try {
-      const task = await Task().create(taskToCreate);
-      response.statusCode = 200;
-      response.send(task);
-    } catch (error) {
-      response.statusCode = 500;
-      response.send({ error });
-    }
-
+  const taskToCreate = {
+    name,
+    isDone,
+    userId
   }
-});
-
-// get one 
-app.get('/task/:id', async (req, response) => {
-  let id = req.params.id;
-  if (id == null || id == undefined) {
-    response.statusCode = 400;
-    response.send({ cause: 'Id not informed' });
-  } else {
-
-    try {
-      const task = await Task().findOne({ where: { id: id } });
-      console.log('task => ', task)
-      // if (task == undefined || task === null) return response.send(null);
-      response.send(task);
-    } catch (error) {
-      console.log('error => ', error)
-
-      response.statusCode = 500;
-      response.send({ title: 'Task not found!', cause: '' });
-    }
+  try {
+    const task = await models.task.create(taskToCreate);
+    response.statusCode = 200;
+    response.send(task);
+  } catch (error) {
+    response.statusCode = 500;
+    console.log('error', error,taskToCreate)
+    response.send({ error });
   }
 });
 
@@ -86,91 +70,116 @@ app.get('/task/:id', async (req, response) => {
 app.get('/user/:id/tasks', async (req, response) => {
   let id = req.params.id;
   if (!validateId(id)) {
-    return sentInvalidId(response, `The id=${id} is null or undefined`);
+    return sendInvalidIdMessage(response, `The id=${id} is null or undefined`);
   }
   try {
-    const userTasks = await models.user.findOne({ where: { id: id }, include: [models.task] });
-    return response.send(userTasks);
+    const tasks = await models.task.findAll({
+      where: [
+        { userId: id }, {
+          deletedAt:
+            { [Op.ne]: null }
+        }
+      ]
+    });
+    if (tasks == null) {
+      response.statusCode = 404;
+      return response.send({ title: 'User not found', cause: 'The user not found in database' })
+    }
+
+    return response.send(tasks);
   } catch (error) {
     console.log('error =>', error)
     response.statusCode = 400;
-    return response.send({ "cause": "not found task" });
+    return response.send({ title: 'Not found', 'cause': 'User not found' });
   }
-
-
 });
 
-// ============================================================================
-// Get all tasks by User
-// app.get('/test/:id/tasks', async (req, response) => {
-//   let id = req.params.id;
-//   if (!validateId(id)) {
-//     return sentInvalidId(response, `The id=${id} is null or undefined`);
-//   }
-//   try {
-//     console.log('models =>', models)
-//     const tasks = await models.author.findAll({ include: [models.Book] });
-//     response.send(tasks);
-//   } catch (error) {
-//     console.log('error =>', error)
-//     response.statusCode = 400;
-//     return response.send({ "cause": "not found task" });
-//   }
+// get one task
+app.get('/task/:id', async (req, response) => {
+  let id = req.params.id;
 
-// });
-// ============================================================================
+  if (!validateId(id)) {
+    return sendInvalidIdMessage(response, `The id=${id} is null or undefined`);
+  } else {
+
+    try {
+      const task = await models.task.findOne({ where: { id: id } });
+      if (task == null) {
+        response.statusCode = 404;
+        return response.send({ title: 'Task', cause: 'Task not found' })
+      }
+      return response.send(task);
+    } catch (error) {
+      console.log('error => ', error)
+
+      response.statusCode = 500;
+      return response.send({ title: 'Task not found!', cause: 'Task not found' });
+    }
+  }
+});
 
 // edit
 app.put('/task/:id', async (req, response) => {
   let id = req.params.id;
 
-  if (id == null || id == undefined) {
-    response.statusMessage = 400;
-    response.send({ cause: 'Id not informed' });
-  } else {
-    try {
-      let taskToUpdate = await Task().findOne({ where: { id: id }, raw: true });
-
-      if (taskToUpdate == undefined || taskToUpdate === null) {
-        response.statusCode = 400;
-        return response.send({ "cause": "not found task" });
-      }
-
-      Object.keys(taskToUpdate).map(key => taskToUpdate[key] = req.body[key]);
-      taskToUpdate['updatedAt'] = new Date();
-      await Task().update(taskToUpdate, { where: { id: id } });
-      response.send(taskToUpdate);
-
-    } catch (error) {
-      console.log('error =>', error)
-      response.statusCode = 400;
-      return response.send({ "cause": "not found task" });
-    }
+  if (!validateId(id)) {
+    return sendInvalidIdMessage(response, `The id=${id} is null or undefined`);
   }
+  try {
+    let taskToUpdate = await models.task.findOne({ where: { id: id }, raw: true });
+
+    if (taskToUpdate === undefined || taskToUpdate === null) {
+      response.statusCode = 404;
+      return response.send({ title: 'Task', cause: 'Task not found' });
+    }
+
+    Object.keys(taskToUpdate).map(key => taskToUpdate[key] = req.body[key]);
+    taskToUpdate['updatedAt'] = new Date();
+    await models.task.update(taskToUpdate, { where: { id: id } });
+    return response.send(taskToUpdate);
+
+  } catch (error) {
+    console.log('error =>', error)
+    response.statusCode = 500;
+    return response.send({ "cause": "not found task" });
+  }
+
 });
 
 // delete
 app.delete('/task/:id', async (req, response) => {
   const id = req.params.id;
-  const exists = await findTask(id);
-  if (!exists) {
-    response.statusCode = 400;
-    return response.send({ title: `Id ${id} not found`, cause: `The id cannot null` });
+
+  if (!validateId(id)) {
+    response.statusCode = 404;
+    return response.send({ title: `Id null`, cause: `The id cannot be null` });
+  }
+  try {
+    const exists = await findTask(id);
+    if (!exists) {
+      response.statusCode = 404;
+      return response.send({ title: `Id ${id} not found`, cause: `The task not found to delete` });
+    }
+
+    const task = {
+      deletedAt: new Date(),
+    };
+
+    const result = await models.task.update(task, { where: { id: id } });
+    console.log('result->', result)
+    response.statusCode = 200;
+    return response.send({});
+  } catch (error) {
+    console.log('error->', error)
+    return response.send({ title: 'Internal error', cause: '' });
+
   }
 
-  const task = {
-    deletedAt: new Date(),
-  };
-
-  await Task.update(task, { where: { id: id } });
-
-  response.statusCode = 200;
-  response.send(task);
 });
 
 const findTask = async (id) => {
   try {
-    const task = await Task.findOne(({ raw: true, where: { id: id } }));
+    const task = await models.task.findOne(({ raw: true, where: { id: id } }));
     if (task == undefined || task === null) {
       return false;
     } else {
@@ -184,12 +193,16 @@ const findTask = async (id) => {
 }
 
 const validateId = (id) => {
-  return id != null && id != undefined;
+  return isNotNull(id);
 }
 
-const sentInvalidId = (response, message) => {
+const sendInvalidIdMessage = (response, message) => {
   response.statusCode = 400;
   return response.send({ title: 'The id cannot be null', cause: message });
+}
+
+const isNotNull = (value) => {
+  return value !== null && value !== undefined;
 }
 
 // create 

@@ -1,3 +1,5 @@
+const uuid = require('uuid').v4
+
 module.exports = (sequelize, DataTypes) => {
   const Task = sequelize.define('task', {
     name: DataTypes.STRING,
