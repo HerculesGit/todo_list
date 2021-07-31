@@ -11,7 +11,6 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 const models = require('./database/models')
-const { Op, Sequelize } = require('sequelize');
 
 // list
 /**
@@ -21,14 +20,8 @@ const { Op, Sequelize } = require('sequelize');
 app.get('/tasks', async (request, response) => {
   response.statusCode = 200;
   try {
-    const tasks = await models.task.findAll({
-      where: {
-        deletedAt: {
-          [Op.ne]: null
-        }
-      }, raw: true
-    })
-    response.send({ tasks });
+    const tasks = await models.task.findAll({ raw: true })
+    response.send(tasks);
   } catch (error) {
     console.log('error', error)
     response.statusCode = 500;
@@ -43,7 +36,9 @@ app.post('/tasks', async (request, response) => {
 
   if (!validateId(userId)) {
     response.statusCode = 404;
-    return sendInvalidIdMessage('The userId not informed');
+    console.log('request.body', request.body,)
+
+    return sendInvalidIdMessage(response, 'The userId not informed');
   }
   if (!isNotNull(name) || name === '') {
     response.statusCode = 400;
@@ -61,7 +56,7 @@ app.post('/tasks', async (request, response) => {
     response.send(task);
   } catch (error) {
     response.statusCode = 500;
-    console.log('error', error,taskToCreate)
+    console.log('error', error, taskToCreate)
     response.send({ error });
   }
 });
@@ -74,12 +69,7 @@ app.get('/user/:id/tasks', async (req, response) => {
   }
   try {
     const tasks = await models.task.findAll({
-      where: [
-        { userId: id }, {
-          deletedAt:
-            { [Op.ne]: null }
-        }
-      ]
+      where: { userId: id }
     });
     if (tasks == null) {
       response.statusCode = 404;
@@ -128,7 +118,7 @@ app.put('/task/:id', async (req, response) => {
   try {
     let taskToUpdate = await models.task.findOne({ where: { id: id }, raw: true });
 
-    if (taskToUpdate === undefined || taskToUpdate === null) {
+    if (!isNotNull(taskToUpdate)) {
       response.statusCode = 404;
       return response.send({ title: 'Task', cause: 'Task not found' });
     }

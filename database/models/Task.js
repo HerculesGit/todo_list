@@ -6,7 +6,7 @@ module.exports = (sequelize, DataTypes) => {
     isDone: DataTypes.BOOLEAN,
     userId: DataTypes.UUID,
   }, {
-
+    paranoid: true,
     tableName: "task",
     modelName: "task"
   });
