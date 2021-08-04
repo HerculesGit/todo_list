@@ -11,6 +11,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 const models = require('./database/models')
+//const temp = require('./temp/model');
 
 // list
 /**
@@ -32,6 +33,63 @@ app.get('/tasks', async (request, response) => {
 
 // create 
 app.post('/tasks', async (request, response) => {
+  await saveTask(request, response);
+});
+
+// depois pode ser implementado um lastSynchronizedDate = assim não precisaria jogar um array tão grande do android nem pegar um tao grande no sql
+app.post('/user/:id/tasks/synchronize', async (req, response) => {
+  let id = req.params.id;
+
+  if (!isNotNull(id)) {
+    return sendInvalidIdMessage(response, 'Ops! id is null');
+  }
+
+  const notFoundTasks = []; // para serem criadas
+  const foundTasks = []; // que estao criadas mas desatualizadas
+  const todasAsTasksOk = [];
+
+
+  // pegar todas as tasks nao deletedAt==null
+  let allTasksByUser = await models.task.findAll({
+    where: { userId: id },
+    paranoid: false,
+  });
+
+  const tasksVindasDoAndroid = req.body;
+
+  console.log('tasksVindasDoAndroid =>', req.body)
+
+  // separar as que nao foram encontradas no server online
+  tasksVindasDoAndroid.map(taskFromAndroid => {
+    const t = allTasksByUser.find(value => value.id == taskFromAndroid.id);
+    if (!isNotNull(t)) { // Ainda na duvida se removo ou nao o uuid vinda do android
+      notFoundTasks.push(taskFromAndroid);
+    } else {
+      foundTasks.push(taskFromAndroid);
+    }
+  });
+  console.log('notFoundTasks =>', notFoundTasks)
+  console.log('foundTasks =>', foundTasks)
+
+  // atualizar as tasks encontradas
+  for (const taskFound of foundTasks) {
+    await models.task.update(taskFound, { where: { id: taskFound.id } });
+    todasAsTasksOk.push(taskFound);
+  }
+
+  // criar todas as tasks nao encontradas
+  for (const taskToNormalize of notFoundTasks) {
+    const task = await models.task.create(taskToNormalize);
+    taskToNormalize['id'] = task.id;
+    await models.task.update(taskToNormalize, { where: { id: task.id }, silent: true });
+    todasAsTasksOk.push(taskToNormalize);
+
+  }
+  console.log('todasAsTasksOk =>', todasAsTasksOk)
+  return response.send(todasAsTasksOk);
+});
+
+saveTask = async (request, response) => {
   let { name, isDone, userId } = request.body;
 
   if (!validateId(userId)) {
@@ -59,7 +117,7 @@ app.post('/tasks', async (request, response) => {
     console.log('error', error, taskToCreate)
     response.send({ error });
   }
-});
+}
 
 // Get all tasks by User
 app.get('/user/:id/tasks', async (req, response) => {
