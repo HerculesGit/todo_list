@@ -86,7 +86,7 @@ app.post('/user/:id/tasks/synchronize', async (req, response) => {
 
   }
   console.log('todasAsTasksOk =>', todasAsTasksOk)
-  return response.send(todasAsTasksOk);
+  return response.send({ userId: id, lastSynchronizedDate: new Date() });
 });
 
 saveTask = async (request, response) => {
